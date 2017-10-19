@@ -1,0 +1,15 @@
+.DS_Store
+bin
+build
+.classpath
+.eclipse
+.gradle
+.project
+.settings
+.idea
+*.iml
+out
+target
+*.log
+*.jfr
+*.hprof

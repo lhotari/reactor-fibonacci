@@ -1,0 +1,59 @@
+group 'io.projectreactor.profiling'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+ext {
+    reactorNettyVersion = "0.7.1.BUILD-SNAPSHOT" // use "./gradlew install" in reactor-netty to update maven local
+    mainClassName = "reactor.ipc.netty.profiling.ReactorFibonacci"
+}
+
+dependencies {
+    compile 'org.slf4j:slf4j-simple:1.7.25'
+    compile "io.projectreactor.ipc:reactor-netty:${reactorNettyVersion}"
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+configurations.all {
+    // check for updates every build
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+}
+
+
+task run(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = mainClassName
+    jvmArgs = ['-XX:+UnlockCommercialFeatures', '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints']
+    jvmArgs += ['-XX:+FlightRecorder', '-XX:FlightRecorderOptions=stackdepth=1024']
+    if (project.hasProperty("printNumberOfCalls")) {
+        args '-p'
+    }
+}
+
+task startJfr(type: Exec) {
+    commandLine = ["jcmd", mainClassName, "JFR.start", "name=recording", "settings=${file('src/main/resources/jfr/profiling.jfc')}"]
+}
+
+task stopJfr(type: Exec) {
+    commandLine = ["jcmd", mainClassName, "JFR.stop", "name=recording", " filename=profiling_${new Date().format("yyyyMMddHHmm")}.jfr"]
+}
+
+task heapDump(type: Exec) {
+    shouldRunAfter stopJfr
+    commandLine = ["jcmd", mainClassName, "GC.heap_dump", "-all", "heapdump_${new Date().format("yyyyMMddHHmm")}.hprof"]
+}
+
+task profileJfr(dependsOn: startJfr) {
+    finalizedBy heapDump, stopJfr
+    doFirst {
+        println("Waiting 60 seconds")
+        Thread.sleep(60000L)
+    }
+}
