@@ -35,6 +35,9 @@ task run(type: JavaExec) {
     if (project.hasProperty("printNumberOfCalls")) {
         args '-p'
     }
+    if (project.hasProperty("useSsl") && useSsl == '1') {
+        args '-s'
+    }
 }
 
 task startJfr(type: Exec) {

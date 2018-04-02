@@ -1,13 +1,20 @@
 package reactor.ipc.netty.profiling;
 
 import io.netty.channel.ChannelOption;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 import reactor.core.publisher.Mono;
 import reactor.ipc.netty.http.client.HttpClient;
 import reactor.ipc.netty.http.server.HttpServer;
 import reactor.ipc.netty.http.server.HttpServerRoutes;
 
+import javax.net.ssl.SSLException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.cert.CertificateException;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -27,15 +34,30 @@ public class ReactorFibonacci {
     private static final int LOCAL_MAX = 250;
     private static final int PORT = 8888;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws CertificateException, SSLException {
         if (args.length > 0 && args[0].equals("-p")) {
             printNumberOfCalls();
+            System.exit(0);
         }
 
-        HttpServer httpServer = HttpServer.create(options ->
-                options.listenAddress(new InetSocketAddress(PORT))
+        Optional<SslContext> sslServerContext;
+        Optional<SslContext> sslClientContext;
+        if (args.length > 0 && args[0].equals("-s")) {
+            SelfSignedCertificate ssc = new SelfSignedCertificate();
+            sslServerContext = Optional.of(SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build());
+            sslClientContext = Optional.of(SslContextBuilder.forClient()
+                    .trustManager(InsecureTrustManagerFactory.INSTANCE).build());
+        } else {
+            sslServerContext = Optional.empty();
+            sslClientContext = Optional.empty();
+        }
+
+        HttpServer httpServer = HttpServer.create(options -> {
+                    options.listenAddress(new InetSocketAddress(PORT));
+                    sslServerContext.ifPresent(sslContext -> options.sslContext(sslContext));
+                }
         );
-        httpServer.startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp()), context ->
+        httpServer.startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext)), context ->
                 System.out.println("HTTP server started on port " + context.getPort()));
     }
 
@@ -72,14 +94,18 @@ public class ReactorFibonacci {
         });
     }
 
-    static HttpClient createHttpClient() {
-        return HttpClient.create(opts -> opts.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 120000));
+    static HttpClient createHttpClient(Optional<SslContext> sslClientContext) {
+        return HttpClient.create(opts -> {
+            opts.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 120000);
+            sslClientContext.ifPresent(sslContext -> opts.sslContext(sslContext));
+        });
     }
 
-    static Function<Long, Mono<Long>> fibonacciReactiveOverHttp() {
-        HttpClient httpClient = createHttpClient();
+    static Function<Long, Mono<Long>> fibonacciReactiveOverHttp(Optional<SslContext> sslClientContext) {
+        HttpClient httpClient = createHttpClient(sslClientContext);
         return n -> {
-            String localUrl = createLocalUrlOnNextLoopbackIp(n);
+            boolean useSsl = sslClientContext.isPresent();
+            String localUrl = createLocalUrlOnNextLoopbackIp(useSsl, n);
             return httpClient.get(localUrl)
                     .flatMap(response -> response.receive()
                             .aggregate()
@@ -90,8 +116,8 @@ public class ReactorFibonacci {
 
     private static final AtomicLong counter = new AtomicLong();
 
-    private static String createLocalUrlOnNextLoopbackIp(Long n) {
+    private static String createLocalUrlOnNextLoopbackIp(boolean useSsl, Long n) {
         long offset = counter.getAndIncrement() % LOCAL_MAX + 1;
-        return "http://" + LOCAL_PREFIX + offset + ":" + PORT + "/" + n;
+        return "http" + (useSsl ? "s" : "") + "://" + LOCAL_PREFIX + offset + ":" + PORT + "/" + n;
     }
 }
