@@ -38,6 +38,9 @@ task run(type: JavaExec) {
     if (project.hasProperty("useSsl") && useSsl == '1') {
         args '-s'
     }
+    if (project.hasProperty("runArgs")) {
+        args runArgs.split(',')
+    }
 }
 
 task startJfr(type: Exec) {

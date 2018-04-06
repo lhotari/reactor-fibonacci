@@ -21,6 +21,17 @@ Since the number of active connections will quickly go over 2<sup>16</sup>, the 
 This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) . 
 Use `./gradlew install` in `reactor-netty` to update the maven local snapshot version of it and make it available for this project. Make sure that the snapshot version matches the one in this project.
 
+### Running with SSL and uploading request bodies
+
+```
+./gradlew -PrunArgs=--post,--ssl run
+```
+
+in another terminal:
+```
+curl -k https://127.0.0.1:8888/15
+```
+
 ### Profiling for 60 seconds with Java Flight Recorder
 
 Requires Oracle JDK
