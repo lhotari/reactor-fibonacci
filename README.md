@@ -18,7 +18,7 @@ Since the number of active connections will quickly go over 2<sup>16</sup>, the 
 ```
 ./gradlew run
 ```
-This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) . 
+This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) .
 Use `./gradlew install` in `reactor-netty` to update the maven local snapshot version of it and make it available for this project. Make sure that the snapshot version matches the one in this project.
 
 ### Running with SSL and uploading request bodies
@@ -56,4 +56,10 @@ This script uses tmux to start the relevant commands to do a simple load test an
 
 ```
 ./profile_with_jfr.sh
+```
+
+Profiling SSL with HTTP POST bodies:
+
+```
+./profile_with_jfr.sh -s -PrunArgs=--post
 ```
