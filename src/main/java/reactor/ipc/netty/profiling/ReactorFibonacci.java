@@ -2,6 +2,7 @@ package reactor.ipc.netty.profiling;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
+import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -84,6 +85,7 @@ public class ReactorFibonacci {
 
         HttpServer httpServer = HttpServer.create(options -> {
                                                       options.listenAddress(new InetSocketAddress(PORT));
+                                                      options.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(32 * 1024));
                                                       sslServerContext.ifPresent(sslContext -> options.sslContext(sslContext));
                                                   }
         );
@@ -187,6 +189,7 @@ public class ReactorFibonacci {
     static HttpClient createHttpClient(Optional<SslContext> sslClientContext) {
         return HttpClient.create(opts -> {
             opts.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 120000);
+            opts.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(32 * 1024));
             sslClientContext.ifPresent(sslContext -> opts.sslContext(sslContext));
         });
     }
