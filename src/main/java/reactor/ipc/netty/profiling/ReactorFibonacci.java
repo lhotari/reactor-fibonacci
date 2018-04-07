@@ -11,7 +11,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.ipc.netty.http.client.HttpClient;
 import reactor.ipc.netty.http.client.HttpClientResponse;
-import reactor.ipc.netty.http.server.*;
+import reactor.ipc.netty.http.server.HttpServer;
+import reactor.ipc.netty.http.server.HttpServerResponse;
+import reactor.ipc.netty.http.server.HttpServerRoutes;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 
@@ -19,10 +21,16 @@ import javax.net.ssl.SSLException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongUnaryOperator;
 import java.util.stream.IntStream;
 
 /**
@@ -43,7 +51,8 @@ public class ReactorFibonacci {
         Set<String> arguments = new HashSet<>(Arrays.asList(args));
 
         if (arguments.contains("--help")) {
-            System.out.println("usage:\n-p/--print-calls\tprint number of calls required for calculating fibonacci\n-s/--ssl\tuse https\n--post\tuse post with request body");
+            System.out.println(
+                    "usage:\n-p/--print-calls\tprint number of calls required for calculating fibonacci\n-s/--ssl\tuse https\n--post\tuse post with request body");
             System.exit(0);
         }
 
@@ -59,7 +68,8 @@ public class ReactorFibonacci {
             SelfSignedCertificate ssc = new SelfSignedCertificate();
             sslServerContext = Optional.of(SslContextBuilder.forServer(ssc.certificate(), ssc.privateKey()).build());
             sslClientContext = Optional.of(SslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE).build());
+                                                            .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                                                            .build());
         } else {
             sslServerContext = Optional.empty();
             sslClientContext = Optional.empty();
@@ -72,27 +82,34 @@ public class ReactorFibonacci {
         }
 
         HttpServer httpServer = HttpServer.create(options -> {
-                    options.listenAddress(new InetSocketAddress(PORT));
-                    sslServerContext.ifPresent(sslContext -> options.sslContext(sslContext));
-                }
+                                                      options.listenAddress(new InetSocketAddress(PORT));
+                                                      sslServerContext.ifPresent(sslContext -> options.sslContext(sslContext));
+                                                  }
         );
         boolean useSsl = sslServerContext.isPresent();
-        httpServer.startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost), usePost), context ->
-                System.out.println("http" + (useSsl ? "s" : "") + " server started on port " + context.getPort()));
+        httpServer
+                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost), usePost),
+                                     context ->
+                                             System.out.println(
+                                                     "http" + (useSsl? "s" : "") + " server started on port " +
+                                                     context.getPort()));
     }
 
     private static void printNumberOfCalls() {
         System.out.println("Number of calls");
-        printFibonacciSums(ReactorFibonacci::calculateNumberOfCalls, (n, tuple) -> System.out.println(n + " requires 1+" + tuple.getT1() + "+" + tuple.getT2() + "="
-                + (1 + tuple.getT1() + tuple.getT2()) + " calls."));
+        printFibonacciSums(ReactorFibonacci::calculateNumberOfCalls, (n, tuple) -> System.out
+                .println(n + " requires 1+" + tuple.getT1() + "+" + tuple.getT2() + "="
+                         + (1 + tuple.getT1() + tuple.getT2()) + " calls."));
     }
 
     private static void printTotalUploadSize() {
         System.out.println("Total upload sizes");
-        printFibonacciSums(ReactorFibonacci::calculateBlockBytesSum, (n, tuple) -> System.out.println(n + " total upload size " + (tuple.getT1() + tuple.getT2())/1024/1024 + " MB"));
+        printFibonacciSums(n -> calculateBlockBytesSum(n).block(), (n, tuple) -> System.out
+                .println(n + " total upload size " + (tuple.getT1() + tuple.getT2()) / 1024 / 1024 + " MB"));
     }
 
-    private static void printFibonacciSums(LongUnaryOperator calculateFunction, BiConsumer<Integer, Tuple2<Long, Long>> logFunction) {
+    private static void printFibonacciSums(LongUnaryOperator calculateFunction,
+                                           BiConsumer<Integer, Tuple2<Long, Long>> logFunction) {
         IntStream.rangeClosed(3, 26).forEach(i -> {
             Long left = calculateFunction.applyAsLong(i - 1);
             Long right = calculateFunction.applyAsLong(i - 2);
@@ -108,40 +125,51 @@ public class ReactorFibonacci {
         if (n <= 2) {
             return entryFunction.applyAsLong(n);
         } else {
-            return entryFunction.applyAsLong(n) + calculateFibonacciSum(n - 1, entryFunction) + calculateFibonacciSum(n - 2, entryFunction);
+            return entryFunction.applyAsLong(n) + calculateFibonacciSum(n - 1, entryFunction) +
+                   calculateFibonacciSum(n - 2, entryFunction);
         }
     }
 
     private static Consumer<HttpServerRoutes> createRoutesBuilder(
             Function<Integer, Mono<Long>> fibonacci, boolean usePost) {
         return routes -> routes.route(request -> request.uri().length() > 1 && request.uri().lastIndexOf('/') == 0 &&
-                (request.method() == HttpMethod.GET || request.method() == HttpMethod.POST), (request, response) -> {
+                                                 (request.method() == HttpMethod.GET ||
+                                                  request.method() == HttpMethod.POST), (request, response) -> {
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
             if (request.method() == HttpMethod.POST) {
                 AtomicInteger counter = new AtomicInteger();
-                long expectedTotalBytes = calculateBlockBytesSum(n);
-                return request.receive().doOnNext(byteBuf -> {
-                            AtomicInteger blockCounter = new AtomicInteger();
-                            byteBuf.forEachByte(value -> {
-                                blockCounter.getAndIncrement();
-                                int expected = counter.getAndIncrement() % 2;
-                                if (value != expected) {
-                                    String message = String.format("Unexpected byte received! index=%d/%d, expected=%d, value=%d, blockcounter=%d", counter.get(), expectedTotalBytes, expected, value, blockCounter.get());
-                                    System.err.println(message);
-                                    throw new IllegalStateException(message);
-                                }
-                                return true;
-                            });
-                        }
-                ).then(outbound);
+                return calculateBlockBytesSum(n)
+                        .map(expectedTotalBytes -> {
+                                 return request
+                                         .receive()
+                                         .doOnNext(byteBuf -> {
+                                                       AtomicInteger blockCounter = new AtomicInteger();
+                                                       byteBuf.forEachByte(value -> {
+                                                           blockCounter.getAndIncrement();
+                                                           int expected = counter.getAndIncrement() % 2;
+                                                           if (value != expected) {
+                                                               String message = String.format(
+                                                                       "Unexpected byte received! index=%d/%d, expected=%d, value=%d, blockcounter=%d",
+                                                                       counter.get(), expectedTotalBytes, expected, value,
+                                                                       blockCounter.get());
+                                                               System.err.println(message);
+                                                               throw new IllegalStateException(message);
+                                                           }
+                                                           return true;
+                                                       });
+                                                   }
+                                         );
+                             }
+                        ).then(outbound);
             } else {
                 return outbound;
             }
         });
     }
 
-    private static Mono<Void> createOutbound(Function<Integer, Mono<Long>> fibonacci, HttpServerResponse response, int n) {
+    private static Mono<Void> createOutbound(Function<Integer, Mono<Long>> fibonacci, HttpServerResponse response,
+                                             int n) {
         if (n <= 2) {
             return response.sendString(Mono.just("1")).then();
         } else {
@@ -162,7 +190,8 @@ public class ReactorFibonacci {
         });
     }
 
-    static Function<Integer, Mono<Long>> fibonacciReactiveOverHttp(Optional<SslContext> sslClientContext, boolean usePost) {
+    static Function<Integer, Mono<Long>> fibonacciReactiveOverHttp(Optional<SslContext> sslClientContext,
+                                                                   boolean usePost) {
         HttpClient httpClient = createHttpClient(sslClientContext);
         return n -> {
             boolean useSsl = sslClientContext.isPresent();
@@ -170,24 +199,30 @@ public class ReactorFibonacci {
             Mono<HttpClientResponse> responseMono = createRequest(httpClient, localUrl, usePost, n.intValue());
             return responseMono
                     .flatMap(response -> response.receive()
-                            .aggregate()
-                            .asString(StandardCharsets.UTF_8))
+                                                 .aggregate()
+                                                 .asString(StandardCharsets.UTF_8))
                     .map(Long::valueOf);
         };
     }
 
-    private static Mono<HttpClientResponse> createRequest(HttpClient httpClient, String localUrl, boolean usePost, int n) {
+    private static Mono<HttpClientResponse> createRequest(HttpClient httpClient, String localUrl, boolean usePost,
+                                                          int n) {
         if (usePost) {
             return httpClient.post(localUrl, request -> request.send(createOffsetAndBlockSizeTuples(n)
-                    .map(offSetAndBlockSize -> {
-                        int offSet = offSetAndBlockSize.getT1();
-                        int blockSize = offSetAndBlockSize.getT2();
-                        ByteBuf buffer = request.alloc().buffer(blockSize);
-                        for (int i = 0; i < blockSize; i++) {
-                            buffer.writeByte((offSet + i) % 2);
-                        }
-                        return buffer;
-                    })));
+                                                                             .map(offSetAndBlockSize -> {
+                                                                                 int offSet =
+                                                                                         offSetAndBlockSize.getT1();
+                                                                                 int blockSize =
+                                                                                         offSetAndBlockSize.getT2();
+                                                                                 ByteBuf buffer = request.alloc()
+                                                                                                         .buffer(Math.max(
+                                                                                                                 blockSize,
+                                                                                                                 4080));
+                                                                                 for (int i = 0; i < blockSize; i++) {
+                                                                                     buffer.writeByte((offSet + i) % 2);
+                                                                                 }
+                                                                                 return buffer;
+                                                                             })));
         } else {
             return httpClient.get(localUrl);
         }
@@ -195,34 +230,36 @@ public class ReactorFibonacci {
 
     static Flux<Tuple2<Integer, Integer>> createOffsetAndBlockSizeTuples(int n) {
         int numberOfBlocks = 241 + (n * 67);
-        int[] multipliers = new int[]{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97};
+        int[] multipliers = new int[] {
+                2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97
+        };
         return Flux.range(1, numberOfBlocks)
-                .map(blockNumber -> {
-                    int multiplier = multipliers[blockNumber % multipliers.length];
-                    int blockSize = 967 * multiplier;
-                    return blockSize;
-                })
-                .scan(Tuples.of(0, 0), (acc, entry) -> Tuples.of(acc.getT1() + acc.getT2(), entry));
+                   .map(blockNumber -> {
+                       int multiplier = multipliers[blockNumber % multipliers.length];
+                       int blockSize = 967 * multiplier;
+                       return blockSize;
+                   })
+                   .scan(Tuples.of(0, 0), (acc, entry) -> Tuples.of(acc.getT1() + acc.getT2(), entry));
     }
 
-    static long calculateBlockBytesSum(long n) {
-        return createOffsetAndBlockSizeTuples((int) n).last().map(t -> t.getT1()).block();
+    static Mono<Long> calculateBlockBytesSum(long n) {
+        return createOffsetAndBlockSizeTuples((int) n).last().map(t -> t.getT1().longValue());
     }
 
     private static void printUploadBytes() {
         System.out.println("Upload total size\nn\tsize");
         Flux.range(1, 25)
-                .map(n ->
-                        Tuples.of(n, calculateBlockBytesSum(n)))
-                .map(tuple -> String.format("%d\t%d bytes\t(%d kB)", tuple.getT1(), tuple.getT2(), tuple.getT2() / 1024))
-                .doOnNext(System.out::println)
-                .subscribe();
+            .map(n ->
+                         Tuples.of(n, calculateBlockBytesSum(n).block()))
+            .map(tuple -> String.format("%d\t%d bytes\t(%d kB)", tuple.getT1(), tuple.getT2(), tuple.getT2() / 1024))
+            .doOnNext(System.out::println)
+            .subscribe();
     }
 
     private static final AtomicLong counter = new AtomicLong();
 
     private static String createLocalUrlOnNextLoopbackIp(boolean useSsl, int n) {
         long offset = counter.getAndIncrement() % LOCAL_MAX + 1;
-        return "http" + (useSsl ? "s" : "") + "://" + LOCAL_PREFIX + offset + ":" + PORT + "/" + n;
+        return "http" + (useSsl? "s" : "") + "://" + LOCAL_PREFIX + offset + ":" + PORT + "/" + n;
     }
 }
