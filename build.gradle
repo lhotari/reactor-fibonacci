@@ -1,17 +1,7 @@
-buildscript {
-    repositories {
-        jcenter()
-    }
-    dependencies {
-        classpath 'com.google.gradle:osdetector-gradle-plugin:1.4.0'
-    }
-}
-
 group 'io.projectreactor.profiling'
 version '1.0-SNAPSHOT'
 
 apply plugin: 'java'
-apply plugin: "com.google.osdetector"
 
 sourceCompatibility = 1.8
 
@@ -29,11 +19,7 @@ ext {
 dependencies {
     compile 'org.slf4j:slf4j-simple:1.7.25'
     compile "io.projectreactor.ipc:reactor-netty:${reactorNettyVersion}"
-    if (osdetector.classifier.startsWith('linux')) {
-        runtime 'io.netty:netty-tcnative-boringssl-static:2.0.8.Final'
-    } else {
-        runtime "io.netty:netty-tcnative:2.0.8.Final:${osdetector.classifier}"
-    }
+    runtime 'io.netty:netty-tcnative-boringssl-static:2.0.8.Final'
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
 
