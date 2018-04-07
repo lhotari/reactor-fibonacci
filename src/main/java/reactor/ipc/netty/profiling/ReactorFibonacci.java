@@ -41,7 +41,7 @@ import java.util.stream.IntStream;
 public class ReactorFibonacci {
     static {
         System.setProperty("java.net.preferIPv4Stack", "true");
-        System.setProperty("io.netty.noResourceLeakDetection", "paranoid");
+        System.setProperty("io.netty.leakDetection.level", "simple");
     }
 
     // Loopback address space is 127.0.0.0/8, use multiple addresses to overcome the limitation of ports (2^16) between two endpoints addresses
