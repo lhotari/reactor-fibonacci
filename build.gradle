@@ -11,8 +11,8 @@ repositories {
 }
 
 ext {
-    reactorNettyVersion = "0.7.5.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
-    nettyVersion = '4.1.22.Final-SNAPSHOT'
+    reactorNettyVersion = "0.7.6.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
+    nettyVersion = '4.1.23.Final'
     mainClassName = "reactor.ipc.netty.profiling.ReactorFibonacci"
 }
 
