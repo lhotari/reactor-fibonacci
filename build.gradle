@@ -30,8 +30,12 @@ configurations.all {
 task run(type: JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     main = mainClassName
-    jvmArgs = ['-XX:+UnlockCommercialFeatures', '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints']
-    jvmArgs += ['-XX:+FlightRecorder', '-XX:FlightRecorderOptions=stackdepth=1024']
+    if (project.hasProperty("runDebug")) {
+        jvmArgs = ['-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005']
+    } else {
+        jvmArgs = ['-XX:+UnlockCommercialFeatures', '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints']
+        jvmArgs += ['-XX:+FlightRecorder', '-XX:FlightRecorderOptions=stackdepth=1024']
+    }
     if (project.hasProperty("printNumberOfCalls")) {
         args '-p'
     }
