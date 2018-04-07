@@ -12,6 +12,7 @@ repositories {
 
 ext {
     reactorNettyVersion = "0.7.5.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
+    nettyVersion = '4.1.22.Final-SNAPSHOT'
     mainClassName = "reactor.ipc.netty.profiling.ReactorFibonacci"
 }
 
@@ -19,6 +20,18 @@ dependencies {
     compile 'org.slf4j:slf4j-simple:1.7.25'
     compile "io.projectreactor.ipc:reactor-netty:${reactorNettyVersion}"
     testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+if (project.hasProperty('nettyVersion') && nettyVersion) {
+    configurations.all {
+        resolutionStrategy {
+            eachDependency { DependencyResolveDetails details ->
+                if (details.requested.group == 'io.netty') {
+                    details.useVersion nettyVersion
+                }
+            }
+        }
+    }
 }
 
 configurations.all {
