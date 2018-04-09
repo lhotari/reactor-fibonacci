@@ -46,7 +46,7 @@ task run(type: JavaExec) {
     main = mainClassName
     if (project.hasProperty("runDebug")) {
         jvmArgs = ['-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005']
-    } else {
+    } else if (project.hasProperty("runJfr")) {
         jvmArgs = ['-XX:+UnlockCommercialFeatures', '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints']
         jvmArgs += ['-XX:+FlightRecorder', '-XX:FlightRecorderOptions=stackdepth=1024']
     }

@@ -18,8 +18,15 @@ Since the number of active connections will quickly go over 2<sup>16</sup>, the 
 ```
 ./gradlew run
 ```
-This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) .
-Use `./gradlew install` in `reactor-netty` to update the maven local snapshot version of it and make it available for this project. Make sure that the snapshot version matches the one in this project.
+This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) . 
+
+Passing `-PuseSnapshot` will use the defined snapshot version of Reactor Netty.
+Use `./gradlew install` in `reactor-netty` to update the maven local snapshot version of it and make it available for this project.
+
+example of running with snapshot version of Reactor Netty:
+```
+./gradlew -PuseSnapshot run
+```
 
 ### Running with SSL and uploading request bodies
 
@@ -35,7 +42,17 @@ curl -k https://127.0.0.1:8888/15
 ### Profiling for 60 seconds with Java Flight Recorder
 
 Requires Oracle JDK
+```
+# assuming the use of sdkman
+sdk u java 8u161-oracle
+```
 
+Start the application with JFR enabled
+```
+./gradlew -PrunJfr run
+```
+
+In another terminal, execute the `profileJfr` task which profiles the application for 60 seconds with JFR:
 ```
 ./gradlew profileJfr
 ```
