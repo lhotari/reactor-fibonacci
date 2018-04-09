@@ -66,12 +66,18 @@ public class ReactorFibonacci {
         ScenarioInfoReports.printLibraryVersionInfo();
 
         startServer(useSsl, usePost, context ->
-                System.out.println(
-                        "http" + (useSsl ? "s" : "") + " server started on port " +
-                                context.getPort()));
+                        System.out.println(
+                                "http" + (useSsl ? "s" : "") + " server started on port " +
+                                        context.getPort()),
+                httpClientOptions ->
+                {
+                    if (arguments.contains("--disable-pool")) {
+                        httpClientOptions.disablePool();
+                    }
+                });
     }
 
-    private static void startServer(boolean useSsl, boolean usePost, Consumer<BlockingNettyContext> onStart) throws CertificateException, SSLException {
+    private static void startServer(boolean useSsl, boolean usePost, Consumer<BlockingNettyContext> onStart, Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) throws CertificateException, SSLException {
         Optional<SslContext> sslServerContext;
         Optional<SslContext> sslClientContext;
         if (useSsl) {
@@ -92,7 +98,7 @@ public class ReactorFibonacci {
                 }
         );
         httpServer
-                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost), usePost),
+                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost, httpClientOptionsCustomizer), usePost),
                         onStart);
     }
 
@@ -151,17 +157,19 @@ public class ReactorFibonacci {
         return n_1.zipWith(n_2, Long::sum);
     }
 
-    static HttpClient createHttpClient(Optional<SslContext> sslClientContext) {
+    static HttpClient createHttpClient(Optional<SslContext> sslClientContext, Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) {
         return HttpClient.create(opts -> {
             opts.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 120000);
             opts.option(ChannelOption.RCVBUF_ALLOCATOR, new FixedRecvByteBufAllocator(32 * 1024));
             sslClientContext.ifPresent(sslContext -> opts.sslContext(sslContext));
+            httpClientOptionsCustomizer.accept(opts);
         });
     }
 
     static Function<Integer, Mono<Long>> fibonacciReactiveOverHttp(Optional<SslContext> sslClientContext,
-                                                                   boolean usePost) {
-        HttpClient httpClient = createHttpClient(sslClientContext);
+                                                                   boolean usePost,
+                                                                   Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) {
+        HttpClient httpClient = createHttpClient(sslClientContext, httpClientOptionsCustomizer);
         return n -> {
             boolean useSsl = sslClientContext.isPresent();
             String localUrl = createLocalUrlOnNextLoopbackIp(useSsl, n);
