@@ -11,6 +11,7 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.ipc.netty.NettyPipeline;
 import reactor.ipc.netty.http.client.*;
 import reactor.ipc.netty.http.server.*;
 import reactor.ipc.netty.tcp.BlockingNettyContext;
@@ -107,6 +108,7 @@ public class ReactorFibonacci {
         return routes -> routes.route(request -> request.uri().length() > 1 &&
                 (request.method() == HttpMethod.GET ||
                         request.method() == HttpMethod.POST), (request, response) -> {
+            response.compression(false);
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
             if (request.method() == HttpMethod.POST) {
@@ -192,22 +194,25 @@ public class ReactorFibonacci {
     }
 
     private static Function<HttpClientRequest, Publisher<Void>> httpPostBodyPublisher(int n) {
-        return request -> request.send(createOffsetAndBlockSizeTuples(n)
-                .map(offSetAndBlockSize -> {
-                    int offSet =
-                            offSetAndBlockSize.getT1();
-                    int blockSize =
-                            offSetAndBlockSize.getT2();
-                    ByteBuf buffer = request.alloc()
-                            .buffer(Math.max(
-                                    blockSize,
-                                    4080));
-                    for (int i = 0; i < blockSize; i++) {
-                        // write a stream of 0 & 1s to easily verify the bytestream on the other end
-                        buffer.writeByte((offSet + i) % 2);
-                    }
-                    return buffer;
-                }));
+        return request -> {
+            request.context().removeHandler(NettyPipeline.CompressionHandler);
+            return request.send(createOffsetAndBlockSizeTuples(n)
+                    .map(offSetAndBlockSize -> {
+                        int offSet =
+                                offSetAndBlockSize.getT1();
+                        int blockSize =
+                                offSetAndBlockSize.getT2();
+                        ByteBuf buffer = request.alloc()
+                                .buffer(Math.max(
+                                        blockSize,
+                                        4080));
+                        for (int i = 0; i < blockSize; i++) {
+                            // write a stream of 0 & 1s to easily verify the bytestream on the other end
+                            buffer.writeByte((offSet + i) % 2);
+                        }
+                        return buffer;
+                    }));
+        };
     }
 
     // create body size as the function of n
