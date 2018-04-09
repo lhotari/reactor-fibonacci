@@ -104,11 +104,11 @@ public class ReactorFibonacci {
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
             if (request.method() == HttpMethod.POST) {
-                AtomicInteger counter = new AtomicInteger();
+                AtomicInteger bodyBytesCounter = new AtomicInteger();
                 return calculateBlockBytesSum(n)
                         .map(expectedTotalBytes ->
                                 request.receive()
-                                        .doOnNext(createByteBufConsumer(counter, expectedTotalBytes))
+                                        .doOnNext(createPostBodyConsumer(bodyBytesCounter, expectedTotalBytes))
                         )
                         .then(outbound);
             } else {
@@ -117,16 +117,16 @@ public class ReactorFibonacci {
         });
     }
 
-    private static Consumer<ByteBuf> createByteBufConsumer(AtomicInteger counter, Long expectedTotalBytes) {
+    private static Consumer<ByteBuf> createPostBodyConsumer(AtomicInteger bodyBytesCounter, Long expectedTotalBytes) {
         return byteBuf -> {
             AtomicInteger blockCounter = new AtomicInteger();
             byteBuf.forEachByte(value -> {
                 blockCounter.getAndIncrement();
-                int expected = counter.getAndIncrement() % 2;
+                int expected = bodyBytesCounter.getAndIncrement() % 2;
                 if (value != expected) {
                     String message = String.format(
                             "Unexpected byte received! index=%d/%d, expected=%d, value=%d, blockcounter=%d",
-                            counter.get(), expectedTotalBytes, expected, value,
+                            bodyBytesCounter.get(), expectedTotalBytes, expected, value,
                             blockCounter.get());
                     System.err.println(message);
                     throw new IllegalStateException(message);
