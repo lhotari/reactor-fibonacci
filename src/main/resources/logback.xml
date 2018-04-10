@@ -21,7 +21,7 @@
         </encoder>
     </appender>
 
-    <logger name="reactor.ipc.netty" level="DEBUG"/>
+    <logger name="reactor.ipc.netty" level="${FILE_LOGGING_LEVEL:-INFO}"/>
 
     <root level="info">
         <appender-ref ref="stdout"/>
