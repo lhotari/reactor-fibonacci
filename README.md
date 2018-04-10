@@ -18,7 +18,7 @@ Since the number of active connections will quickly go over 2<sup>16</sup>, the 
 ```
 ./gradlew run
 ```
-This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) . 
+This uses the Reactor Netty version specified in [`build.gradle`](build.gradle) .
 
 Passing `-PuseSnapshot` will use the defined snapshot version of Reactor Netty.
 Use `./gradlew install` in `reactor-netty` to update the maven local snapshot version of it and make it available for this project.
@@ -38,6 +38,11 @@ in another terminal:
 ```
 curl -k https://127.0.0.1:8888/15
 ```
+
+### Enabling debug logging
+
+Add `-PfileLoggingLevel=debug` parameter. This uses debug level for logging to `log-output.log`.
+Logging with debug level will slow down the execution when using `--post` because of the large request body payloads that get logged.
 
 ### Profiling for 60 seconds with Java Flight Recorder
 
