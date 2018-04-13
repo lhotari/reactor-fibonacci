@@ -15,6 +15,8 @@ import reactor.ipc.netty.NettyPipeline;
 import reactor.ipc.netty.http.client.*;
 import reactor.ipc.netty.http.server.*;
 import reactor.ipc.netty.tcp.BlockingNettyContext;
+import reactor.util.Logger;
+import reactor.util.Loggers;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 
@@ -33,6 +35,8 @@ import java.util.function.Function;
  * Based on code from [this gist](https://gist.github.com/ris58h/9a3322c7e2989015e3dc09370b42ff7b) by [ris58h](https://github.com/ris58h). *
  */
 public class ReactorFibonacci {
+    static final Logger log = Loggers.getLogger(ReactorFibonacci.class);
+
     static {
         System.setProperty("java.net.preferIPv4Stack", "true");
         System.setProperty("io.netty.leakDetection.level", "simple");
@@ -64,7 +68,7 @@ public class ReactorFibonacci {
 
         boolean useSsl = arguments.contains("-s") || arguments.contains("--ssl");
 
-        ScenarioInfoReports.printLibraryVersionInfo();
+        ScenarioInfoReports.logLibraryVersionInfo();
 
         startServer(useSsl, usePost, context ->
                         System.out.println(
@@ -136,7 +140,7 @@ public class ReactorFibonacci {
                             "Unexpected byte received! index=%d/%d, expected=%d, value=%d, blockcounter=%d",
                             bodyBytesCounter.get(), expectedTotalBytes, expected, value,
                             blockCounter.get());
-                    System.err.println(message);
+                    log.error(message);
                     throw new IllegalStateException(message);
                 }
                 return true;

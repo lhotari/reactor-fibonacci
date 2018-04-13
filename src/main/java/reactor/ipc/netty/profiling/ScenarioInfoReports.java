@@ -3,6 +3,8 @@ package reactor.ipc.netty.profiling;
 import io.netty.channel.Channel;
 import reactor.core.publisher.Flux;
 import reactor.ipc.netty.http.server.HttpServer;
+import reactor.util.Logger;
+import reactor.util.Loggers;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 
@@ -15,20 +17,22 @@ import java.util.stream.IntStream;
  * Methods to print out information to System.out about the test scenario
  */
 class ScenarioInfoReports {
+    static final Logger log = Loggers.getLogger(ScenarioInfoReports.class);
+
     public static void printInfo() {
         printNumberOfCalls();
         printUploadBytes();
         printTotalUploadSize();
     }
 
-    public static void printLibraryVersionInfo() {
+    public static void logLibraryVersionInfo() {
         Arrays.asList(Flux.class, HttpServer.class, Channel.class)
-                .stream().forEach(ScenarioInfoReports::printLibraryVersionInfo);
+                .stream().forEach(ScenarioInfoReports::logLibraryVersionInfo);
     }
 
-    private static void printLibraryVersionInfo(Class<?> clazz) {
+    private static void logLibraryVersionInfo(Class<?> clazz) {
         Package aPackage = clazz.getPackage();
-        System.out.println(aPackage.getImplementationTitle() + " version: " + aPackage.getImplementationVersion());
+        log.info(aPackage.getImplementationTitle() + " version: " + aPackage.getImplementationVersion());
     }
 
     private static void printNumberOfCalls() {
