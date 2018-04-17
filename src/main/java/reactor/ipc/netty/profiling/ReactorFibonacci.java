@@ -116,11 +116,21 @@ public class ReactorFibonacci {
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
             if (request.method() == HttpMethod.POST) {
-                AtomicInteger bodyBytesCounter = new AtomicInteger();
+                AtomicLong bodyBytesCounter = new AtomicLong();
                 return calculateBlockBytesSum(n)
-                        .map(expectedTotalBytes ->
-                                request.receive()
-                                        .doOnNext(createPostBodyConsumer(bodyBytesCounter, expectedTotalBytes))
+                        .map(expectedTotalBytes -> {
+                                    return request.receive()
+                                            .doOnNext(createPostBodyConsumer(bodyBytesCounter, expectedTotalBytes))
+                                            .doFinally(signalType -> {
+                                                if (bodyBytesCounter.get() != expectedTotalBytes) {
+                                                    String message = String.format(
+                                                            "Unexpected byte count received! expected=%d, received=%d",
+                                                            expectedTotalBytes, bodyBytesCounter.get());
+                                                    log.error(message);
+                                                    throw new IllegalStateException(message);
+                                                }
+                                            });
+                                }
                         )
                         .then(outbound);
             } else {
@@ -129,12 +139,12 @@ public class ReactorFibonacci {
         });
     }
 
-    private static Consumer<ByteBuf> createPostBodyConsumer(AtomicInteger bodyBytesCounter, Long expectedTotalBytes) {
+    private static Consumer<ByteBuf> createPostBodyConsumer(AtomicLong bodyBytesCounter, Long expectedTotalBytes) {
         return byteBuf -> {
             AtomicInteger blockCounter = new AtomicInteger();
             byteBuf.forEachByte(value -> {
                 blockCounter.getAndIncrement();
-                int expected = bodyBytesCounter.getAndIncrement() % 2;
+                int expected = (int) (bodyBytesCounter.getAndIncrement() % 2);
                 if (value != expected) {
                     String message = String.format(
                             "Unexpected byte received! index=%d/%d, expected=%d, value=%d, blockcounter=%d",
