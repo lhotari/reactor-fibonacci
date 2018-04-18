@@ -58,6 +58,7 @@ task run(type: JavaExec) {
     } else if (project.hasProperty("runJfr")) {
         jvmArgs = ['-XX:+UnlockCommercialFeatures', '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints']
         jvmArgs += ['-XX:+FlightRecorder', '-XX:FlightRecorderOptions=stackdepth=1024']
+        systemProperty 'io.netty.leakDetection.level', 'disabled'
     }
     if (project.hasProperty("printNumberOfCalls")) {
         args '-p'
