@@ -116,12 +116,13 @@ public class ReactorFibonacci {
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
             if (request.method() == HttpMethod.POST) {
-                AtomicLong bodyBytesCounter = new AtomicLong();
                 return calculateBlockBytesSum(n)
-                        .map(expectedTotalBytes -> {
+                        .flatMap(expectedTotalBytes -> {
+                                    AtomicLong bodyBytesCounter = new AtomicLong();
                                     return request.receive()
                                             .doOnNext(createPostBodyConsumer(bodyBytesCounter, expectedTotalBytes))
                                             .doFinally(signalType -> {
+                                                log.info("Read {} bytes", bodyBytesCounter.get());
                                                 if (bodyBytesCounter.get() != expectedTotalBytes) {
                                                     String message = String.format(
                                                             "Unexpected byte count received! expected=%d, received=%d",
@@ -129,10 +130,9 @@ public class ReactorFibonacci {
                                                     log.error(message);
                                                     throw new IllegalStateException(message);
                                                 }
-                                            });
+                                            }).then(outbound);
                                 }
-                        )
-                        .then(outbound);
+                        );
             } else {
                 return outbound;
             }
@@ -210,6 +210,7 @@ public class ReactorFibonacci {
     private static Function<HttpClientRequest, Publisher<Void>> httpPostBodyPublisher(int n) {
         return request -> {
             request.context().removeHandler(NettyPipeline.CompressionHandler);
+            AtomicLong bodyBytesCounter = new AtomicLong();
             return request.send(createOffsetAndBlockSizeTuples(n)
                     .map(offSetAndBlockSize -> {
                         int offSet =
@@ -223,8 +224,12 @@ public class ReactorFibonacci {
                         for (int i = 0; i < blockSize; i++) {
                             // write a stream of 0 & 1s to easily verify the bytestream on the other end
                             buffer.writeByte((offSet + i) % 2);
+                            bodyBytesCounter.incrementAndGet();
                         }
                         return buffer;
+                    })
+                    .doFinally(signalType -> {
+                        log.info("Wrote {} bytes", bodyBytesCounter.get());
                     }));
         };
     }
@@ -250,7 +255,7 @@ public class ReactorFibonacci {
     }
 
     static Mono<Long> calculateBlockBytesSum(long n) {
-        return createOffsetAndBlockSizeTuples((int) n).last().map(t -> t.getT1().longValue());
+        return createOffsetAndBlockSizeTuples((int) n).last().map(t -> t.getT1().longValue() + t.getT2().longValue());
     }
 
     private static final AtomicLong httpRequestCounter = new AtomicLong();
