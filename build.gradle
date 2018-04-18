@@ -22,6 +22,9 @@ ext {
 dependencies {
     compile "io.projectreactor.ipc:reactor-netty:${reactorNettyVersion}"
     runtime 'io.netty:netty-tcnative-boringssl-static:2.0.8.Final'
+    if (project.hasProperty('epoll')) {
+        runtime "io.netty:netty-transport-native-epoll:${reactorNettyVersion}:linux-x86_64"
+    }
     runtime 'ch.qos.logback:logback-classic:1.2.3'
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
