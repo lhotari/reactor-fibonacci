@@ -51,7 +51,12 @@ public class ReactorFibonacci {
 
         if (arguments.contains("--help")) {
             System.out.println(
-                    "usage:\n-p/--print-calls\tprint number of calls required for calculating fibonacci\n-s/--ssl\tuse https\n--post\tuse post with request body");
+                    "usage:\n"
+                            + "-p/--print-calls\tprint number of calls required for calculating fibonacci\n"
+                            + "-s/--ssl\tuse https\n"
+                            + "--post\tuse post with request body\n"
+                            + "--disable-pool\tdisable the connection pool on the client\n"
+                            + "--no-consume-on-server\tdon't consume post body on server side");
             System.exit(0);
         }
 
@@ -69,11 +74,16 @@ public class ReactorFibonacci {
 
         ScenarioInfoReports.logLibraryVersionInfo();
 
-        startServer(useSsl, usePost, context ->
+        boolean dontConsumeBodyOnServer = arguments.contains("--no-consume-on-server");
+        if (dontConsumeBodyOnServer) {
+            System.out.println("The POST body won't be consumed to find possible problems in this case.");
+        }
+
+        startServer(useSsl, usePost, dontConsumeBodyOnServer,
+                context ->
                         System.out.println(
                                 "http" + (useSsl ? "s" : "") + " server started on port " +
-                                        context.getPort()),
-                httpClientOptions ->
+                                        context.getPort()), httpClientOptions ->
                 {
                     if (arguments.contains("--disable-pool")) {
                         httpClientOptions.disablePool();
@@ -81,7 +91,7 @@ public class ReactorFibonacci {
                 });
     }
 
-    private static void startServer(boolean useSsl, boolean usePost, Consumer<BlockingNettyContext> onStart, Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) throws CertificateException, SSLException {
+    private static void startServer(boolean useSsl, boolean usePost, boolean dontConsumeBody, Consumer<BlockingNettyContext> onStart, Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) throws CertificateException, SSLException {
         Optional<SslContext> sslServerContext;
         Optional<SslContext> sslClientContext;
         if (useSsl) {
@@ -102,19 +112,19 @@ public class ReactorFibonacci {
                 }
         );
         httpServer
-                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost, httpClientOptionsCustomizer), usePost),
+                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost, httpClientOptionsCustomizer), usePost, dontConsumeBody),
                         onStart);
     }
 
     private static Consumer<HttpServerRoutes> createRoutesBuilder(
-            Function<Integer, Mono<Long>> fibonacci, boolean usePost) {
+            Function<Integer, Mono<Long>> fibonacci, boolean usePost, boolean dontConsumeBody) {
         return routes -> routes.route(request -> request.uri().length() > 1 &&
                 (request.method() == HttpMethod.GET ||
                         request.method() == HttpMethod.POST), (request, response) -> {
             response.compression(false);
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
-            if (request.method() == HttpMethod.POST) {
+            if (request.method() == HttpMethod.POST && !dontConsumeBody) {
                 return calculateBlockBytesSum(n)
                         .flatMap(expectedTotalBytes -> {
                                     AtomicLong bodyBytesCounter = new AtomicLong();
