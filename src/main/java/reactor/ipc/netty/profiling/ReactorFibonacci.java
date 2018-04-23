@@ -1,5 +1,6 @@
 package reactor.ipc.netty.profiling;
 
+import com.codahale.metrics.*;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.FixedRecvByteBufAllocator;
@@ -9,6 +10,7 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
 import org.reactivestreams.Publisher;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.ipc.netty.NettyPipeline;
@@ -25,6 +27,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -79,7 +82,11 @@ public class ReactorFibonacci {
             System.out.println("The POST body won't be consumed to find possible problems in this case.");
         }
 
-        startServer(useSsl, usePost, dontConsumeBodyOnServer,
+        MetricRegistry metricRegistry = new MetricRegistry();
+
+        startMetricsReporter(metricRegistry);
+
+        startServer(useSsl, usePost, dontConsumeBodyOnServer, metricRegistry,
                 context ->
                         System.out.println(
                                 "http" + (useSsl ? "s" : "") + " server started on port " +
@@ -91,7 +98,16 @@ public class ReactorFibonacci {
                 });
     }
 
-    private static void startServer(boolean useSsl, boolean usePost, boolean dontConsumeBody, Consumer<BlockingNettyContext> onStart, Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) throws CertificateException, SSLException {
+    private static void startMetricsReporter(MetricRegistry metricRegistry) {
+        final Slf4jReporter reporter = Slf4jReporter.forRegistry(metricRegistry)
+                .outputTo(LoggerFactory.getLogger("metrics"))
+                .convertRatesTo(TimeUnit.SECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .build();
+        reporter.start(15, TimeUnit.SECONDS);
+    }
+
+    private static void startServer(boolean useSsl, boolean usePost, boolean dontConsumeBody, MetricRegistry metricRegistry, Consumer<BlockingNettyContext> onStart, Consumer<? super HttpClientOptions.Builder> httpClientOptionsCustomizer) throws CertificateException, SSLException {
         Optional<SslContext> sslServerContext;
         Optional<SslContext> sslClientContext;
         if (useSsl) {
@@ -112,24 +128,25 @@ public class ReactorFibonacci {
                 }
         );
         httpServer
-                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost, httpClientOptionsCustomizer), usePost, dontConsumeBody),
+                .startRouterAndAwait(createRoutesBuilder(fibonacciReactiveOverHttp(sslClientContext, usePost, httpClientOptionsCustomizer), usePost, dontConsumeBody, metricRegistry),
                         onStart);
     }
 
     private static Consumer<HttpServerRoutes> createRoutesBuilder(
-            Function<Integer, Mono<Long>> fibonacci, boolean usePost, boolean dontConsumeBody) {
+            Function<Integer, Mono<Long>> fibonacci, boolean usePost, boolean dontConsumeBody, MetricRegistry metricRegistry) {
         return routes -> routes.route(request -> request.uri().length() > 1 &&
                 (request.method() == HttpMethod.GET ||
                         request.method() == HttpMethod.POST), (request, response) -> {
             response.compression(false);
             int n = Integer.parseInt(request.uri().replaceAll("/", ""));
             Mono<Void> outbound = createOutbound(fibonacci, response, n);
+            metricRegistry.meter("requests").mark();
             if (request.method() == HttpMethod.POST && !dontConsumeBody) {
                 return calculateBlockBytesSum(n)
                         .flatMap(expectedTotalBytes -> {
                                     AtomicLong bodyBytesCounter = new AtomicLong();
                                     return request.receive()
-                                            .doOnNext(createPostBodyConsumer(bodyBytesCounter, expectedTotalBytes))
+                                            .doOnNext(createPostBodyConsumer(bodyBytesCounter, expectedTotalBytes, metricRegistry))
                                             .doFinally(signalType -> {
                                                 log.info("Read {} bytes", bodyBytesCounter.get());
                                                 if (bodyBytesCounter.get() != expectedTotalBytes) {
@@ -148,7 +165,8 @@ public class ReactorFibonacci {
         });
     }
 
-    private static Consumer<ByteBuf> createPostBodyConsumer(AtomicLong bodyBytesCounter, Long expectedTotalBytes) {
+    private static Consumer<ByteBuf> createPostBodyConsumer(AtomicLong bodyBytesCounter, Long expectedTotalBytes, MetricRegistry metricRegistry) {
+        Meter bodyConsumeRate = metricRegistry.meter("bodyConsumeRate");
         return byteBuf -> {
             AtomicInteger blockCounter = new AtomicInteger();
             byteBuf.forEachByte(value -> {
@@ -164,6 +182,7 @@ public class ReactorFibonacci {
                 }
                 return true;
             });
+            bodyConsumeRate.mark(blockCounter.get());
         };
     }
 
