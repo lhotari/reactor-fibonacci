@@ -11,11 +11,11 @@ repositories {
 }
 
 ext {
-    reactorNettyVersion = project.hasProperty('useSnapshot') ? "0.7.7.BUILD-SNAPSHOT" : "0.7.6.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
+    reactorNettyVersion = project.hasProperty('useSnapshot') ? "0.7.8.BUILD-SNAPSHOT" : "0.7.7.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
     if (project.hasProperty('forceReactorCoreVersion')) {
-        reactorCoreVersion = '3.1.6.RELEASE'
+        reactorCoreVersion = '3.1.7.RELEASE'
     }
-    nettyVersion = '4.1.24.Final'
+    nettyVersion = '4.1.25.Final'
     mainClassName = "reactor.ipc.netty.profiling.ReactorFibonacci"
 }
 
