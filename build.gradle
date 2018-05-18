@@ -15,7 +15,9 @@ ext {
     if (project.hasProperty('forceReactorCoreVersion')) {
         reactorCoreVersion = '3.1.7.RELEASE'
     }
-    nettyVersion = '4.1.25.Final'
+    if (project.hasProperty('forceNettyVersion')) {
+        nettyVersion = '4.1.25.Final'
+    }
     mainClassName = "reactor.ipc.netty.profiling.ReactorFibonacci"
 }
 
