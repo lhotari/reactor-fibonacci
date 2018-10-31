@@ -11,19 +11,19 @@ repositories {
 }
 
 ext {
-    reactorNettyVersion = project.hasProperty('useSnapshot') ? "0.7.8.BUILD-SNAPSHOT" : "0.7.7.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
+    reactorNettyVersion = project.hasProperty('useSnapshot') ? "0.7.12.BUILD-SNAPSHOT" : "0.7.11.RELEASE" // use "./gradlew install" in reactor-netty to update maven local
     if (project.hasProperty('forceReactorCoreVersion')) {
-        reactorCoreVersion = '3.1.7.RELEASE'
+        reactorCoreVersion = '3.1.11.RELEASE'
     }
     if (project.hasProperty('forceNettyVersion')) {
-        nettyVersion = '4.1.25.Final'
+        nettyVersion = '4.1.30.Final'
     }
     mainClassName = "reactor.ipc.netty.profiling.ReactorFibonacci"
 }
 
 dependencies {
     compile "io.projectreactor.ipc:reactor-netty:${reactorNettyVersion}"
-    runtime 'io.netty:netty-tcnative-boringssl-static:2.0.8.Final'
+    runtime 'io.netty:netty-tcnative-boringssl-static:2.0.19.Final'
     if (project.hasProperty('epoll')) {
         runtime "io.netty:netty-transport-native-epoll:${reactorNettyVersion}:linux-x86_64"
     }
