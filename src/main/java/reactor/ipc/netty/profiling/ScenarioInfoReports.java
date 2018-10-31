@@ -32,7 +32,9 @@ class ScenarioInfoReports {
 
     private static void logLibraryVersionInfo(Class<?> clazz) {
         Package aPackage = clazz.getPackage();
-        log.info(aPackage.getImplementationTitle() + " version: " + aPackage.getImplementationVersion());
+        if (aPackage.getImplementationVersion() != null) {
+            log.info(aPackage.getImplementationTitle() + " version: " + aPackage.getImplementationVersion());
+        }
     }
 
     private static void printNumberOfCalls() {
